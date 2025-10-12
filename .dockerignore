@@ -1,0 +1,13 @@
+.DS_Store
+.env
+.git
+.gitignore
+*.log*
+node_modules
+public/build
+storage/framework/cache/data
+storage/framework/sessions
+storage/framework/views
+storage/logs
+Thumbs.db
+vendor

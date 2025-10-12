@@ -1,61 +1,110 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Deploying Laravel with Octane + FrankenPHP on Sevalla
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Sevalla works with Docker. Therefore, this repository includes a [Dockerfile](/Dockerfile) that packages a Laravel application and runs it.
 
-## About Laravel
+## Architecture
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+On Sevalla, every app has a **default web process** that serves HTTP requests. In this example, the app is built from the repository’s `Dockerfile`, and the web process runs a single service:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **FrankenPHP (Laravel Octane)**: listens on `localhost:8080` and serves your Laravel app.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+The start command is in [entrypoint.sh](/entrypoint.sh), which launches Octane with FrankenPHP.
 
-## Learning Laravel
+## Steps
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 1. Prepare your repository
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+Copy this repository’s `Dockerfile` and `entrypoint.sh` files into the **root** of your Laravel project. Or just clone this repository if you are starting from scratch.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 2. Create Sevalla resources
 
-## Laravel Sponsors
+1. [Create a **database**](https://app.sevalla.com/databases).
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+2. [Create a **new application**](https://app.sevalla.com/apps/new) and connect your repository (don't deploy it yet).
 
-### Premium Partners
+### 3. Configure the Sevalla app
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+#### A. Create a process to run DB migrations
 
-## Contributing
+1. Go to **App → Processes** and create a **Job** process.
+2. Set the start command to:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+   ```bash
+   php artisan migrate --force
+   ```
 
-## Code of Conduct
+<img width="540" src="https://github.com/user-attachments/assets/7af80896-c431-4cd4-b5f0-5034b2c65d23" />
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+#### B. Allow internal connections between the app and database
 
-## Security Vulnerabilities
+1. Go to **App → Networking** and scroll to **Connected services**.
+2. Click **Add connection**, select the database you created, and enable **Add environment variables to the application** in the modal.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+#### C. Set environment variables
 
-## License
+Set the following in **App → Environment variables**. Fill in any empty values for your setup.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+**Notes:**
+- Set `DB_CONNECTION` with the value matching the database you created in step **B**. E.g., `mysql` or `pgsql`.
+- `DB_URL` is automatically added if you completed step **B**.
+- **Set `APP_URL` and `ASSET_URL` to your Sevalla app URL (e.g., `https://your-app.sevalla.app` or your custom domain).**
+- Ensure `APP_KEY` is set (e.g., via `php artisan key:generate`).
+- In production, keep `APP_DEBUG` to `false`.
+
+#### D. Start the scheduler
+
+1. Go to **App → Processes → Create process → Background worker**.
+2. Set the custom start command to `php artisan schedule:work`.
+
+<img width="540" height="1152" src="https://github.com/user-attachments/assets/78224eac-66d0-4a49-b128-4087a31b37b5" />
+
+#### E. Start your default queue
+
+1. Go to **App → Processes → Create process → Background worker**.
+2. Set the custom start command to `php artisan queue:work`.
+
+#### F. Switch to Dockerfile-based build
+
+Go to **App → Settings → Build** and change **Build environment** to **Dockerfile**.
+
+<img width="473" src="https://github.com/user-attachments/assets/b074529e-3f51-471d-aa89-9a585dda2e5a" />
+
+### 4. Deploy 🚀
+
+Trigger a new deployment from Sevalla. Once deployed, your Laravel app will run inside the web process on Octane + FrankenPHP.
+
+## Runtime architecture
+
+- Octane server: **FrankenPHP** (single binary HTTP server + PHP runtime)
+- PHP version: from image tag (currently `php8.4`)
+- Build steps: Composer install (no dev), Vite build, copy into FrankenPHP image
+- Health endpoint: `GET /up` (built-in in Laravel 12 via `bootstrap/app.php`)
+
+## Files
+
+- `Dockerfile`: multi-stage build. Final stage uses `dunglas/frankenphp` and runs `php artisan octane:start --server=frankenphp`.
+- `entrypoint.sh`: starts Octane with sane defaults and accepts env overrides.
+- `public/frankenphp-worker.php`: boots the Octane FrankenPHP worker.
+- `config/octane.php`: default server set to `frankenphp`.
+
+## Required env vars
+
+Set these in Sevalla → App → Environment variables:
+
+- `APP_ENV=production`
+- `APP_DEBUG=false`
+- `APP_KEY` (generate locally via `php artisan key:generate`)
+- `APP_URL` and `ASSET_URL` pointing to your Sevalla URL
+- `DB_URL` (auto-added if you connect your Sevalla database) or the usual `DB_*` vars
+- Optional Octane tuning:
+  - `PORT` (defaults 8080 on container)
+  - `ADMIN_PORT` (defaults 2019)
+  - `OCTANE_WORKERS` (e.g., `auto`, `2`, `4`)
+  - `OCTANE_MAX_REQUESTS` (default `500`)
+  - `OCTANE_MAX_EXECUTION_TIME` (default `30`)
+
+## Notes and tips
+
+- The Dockerfile installs common PHP extensions via `install-php-extensions` (e.g., `intl`, `mbstring`, `pdo_mysql`, `opcache`, `zip`, `redis`). Add more as your app needs.
+- The image exposes port `8080`. Sevalla maps this to your public URL.
+- Octane best practices: avoid singletons with request-specific state; monitor for memory leaks. See the official docs: [Laravel Octane → Serving your application](https://laravel.com/docs/12.x/octane#serving-your-application).
